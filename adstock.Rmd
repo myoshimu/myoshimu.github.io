@@ -1,0 +1,111 @@
+---
+title: "Ad Stock Effection"
+output: html_notebook
+---
+
+### 自動車会社ごとにStockについて検証してα決める
+
+α（残存率）0-0.95まで0.05きざみでストックパターンをすべて計算
+左端（1期）のデータは外す（ストックの時をのぞく）->AICで比較するため全部2日目からみるようにする
+各モデルでAICを計算して一番小さいモデルが妥当なStockとみなす
+
+```{r}
+library(dlm)
+# Create Data
+query<-read.csv("mazda/daily.csv",sep="\t")
+grp<-read.csv("mazda/grp.csv")
+# 検索数前処理
+q <- query %>%
+  dplyr::select(StartDate,Queries) %>%
+  dplyr::group_by(date=as.Date(StartDate)) %>%
+  dplyr::summarise(query = sum(Queries))
+
+# 視聴数を単純に日別集計
+g<- grp %>%
+  dplyr::select(date,person) %>%
+  dplyr::group_by(date=as.Date(date)) %>%
+  dplyr::summarise(grp = sum(person))
+g[is.na(g)]<-0
+
+#視聴率と検索を結合
+d <- dplyr::inner_join(q,g,by="date")
+y<-log(d$query)
+x1<-log(d$grp)
+```
+
+```{r}
+# ストックを入れない時の効果
+  build.1 <- function(params){
+    dlmModReg(x1, dV = exp(params[1]), dW = exp(params[2:3]))
+  }
+  fit.1 <- dlmMLE(y,rep(0,4),build.1,hessian=T)
+    -2*fit.1$value+2*3
+```
+
+
+### Calculate Advertising Adstock
+```{r}
+# http://stackoverflow.com/questions/14372880/simple-examples-of-filter-function-recursive-option-specifically
+
+
+adstock <- function(adstock_rate) {
+  # Alternative Method Using Loops Proposed by Linh Tran
+  #adstock_rate=0
+   stock = numeric(length(d$grp))
+   stock[1] = mean(d$grp)
+   for(i in 2:length(d$grp)){
+   stock[i] = (1-adstock_rate)*d$grp[i-1] + adstock_rate * stock[i-1]
+  }
+ #stock = stats::filter(d$grp, filter=adstock_rate, method="recursive" ,init=mean(d$grp))
+  y<-log(d$query)
+  x1<-log(d$grp)
+  x2<-log(stock) 
+  x<-cbind(x1,x2)
+  # x(grp,ストック)が説明変数,dWには切片と回帰係数2個の分散入力、ここを固定にすると時変しなくなる
+  build.1 <- function(params){
+    dlmModReg(x, dV = exp(params[1]), dW = exp(params[2:4]))
+  }
+  fit.1 <- dlmMLE(y,rep(0,4),build.1,hessian=T)
+  # AIC.αがパラメータ数として追加されるので4+1=5
+  # パラメータが1増えると罰則が2増える(パラメータ数が低いモデルの方が良いとされるため=けちの原理)
+    -2*fit.1$value+2*5
+}
+```
+
+
+```{r}
+adstock(0.5)
+```
+
+
+```{r}
+aic = numeric(9)
+for(i in 1:9){
+  aic[i]<-adstock(i*0.1)
+  print(i*0.1)
+  print(aic[i])
+}
+```
+
+```{r}
+filt1<-dlmFilter(y,mod1) # Apply Kalman Filter
+
+```
+
+
+
+
+
+### Networkごとの検証
+
+### 競合のCMを説明変数に入れる
+
+*時間帯はいまいちでは？
+時間帯で考える場合はすべての会社のデータを統合すべきでは？
+競合のCMが流れる影響によるカテゴリ効果
+例：日産のCMみてTOYOTAを検索
+y=Suzuki+Nissan
+
+Networkは相互相関を考える必要があるがdlmでなくプログラミング必要
+
+### 週末効果
