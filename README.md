@@ -1,5 +1,5 @@
 # 説明
-[keepgamesimple](https://kbysta1.github.io/keepgamesimple/)のリポジトリです.
+[myoshimu](https://myoshimu.github.io/myoshimu/)のリポジトリです.
 htmlはご自由に使って頂いてかまいませんが、画像の利用はご遠慮ください.
 
 # 免責
